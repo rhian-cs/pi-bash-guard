@@ -1,7 +1,10 @@
 /**
  * Bash Guard — Adversarial Security Review Extension
  *
- * Ported from @mariozechner/* to @earendil-works/* packages
+ * Ported from @mariozechner/* to @earendil-works/* packages.
+ *
+ * Original source: https://github.com/pascal-de-ladurantaye/pi-agent/blob/main/extensions/bash-guard
+ * Copyright (c) 2026 Pascal de Ladurantaye — see LICENSE.
  *
  * Intercepts bash tool calls and runs 5 parallel security reviews using
  * Claude Haiku 4.5 (via the user's configured model registry). Based on vote consensus:
