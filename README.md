@@ -210,7 +210,11 @@ for your rate limits.
   "explainer": {
     "provider": "zai",            // required
     "id": "glm-5.1"               // required
-  }
+  },
+
+  // Shell command run (fire-and-forget, non-blocking) when an approval
+  // prompt appears. Any shell command works. Empty/absent = no sound.
+  "approvalSoundCommand": "paplay /usr/share/sounds/Oxygen-Sys-Warning.ogg"
 }
 ```
 
@@ -233,6 +237,7 @@ When the config file is absent or invalid, Bash Guard uses:
 | `voters`       | `[{ anthropic, claude-haiku-4-5 }]` |
 | `explainer`    | `{ anthropic, claude-haiku-4-5 }`   |
 | `votesPerModel`| `5`                              |
+| `approvalSoundCommand` | _(disabled — empty string)_ |
 
 ### When config takes effect
 

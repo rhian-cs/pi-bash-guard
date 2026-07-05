@@ -39,6 +39,7 @@ import {
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, matchesKey, Key, Spacer, Text } from "@earendil-works/pi-tui";
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -104,6 +105,9 @@ interface BashGuardConfig {
 	voters: VoterConfig[];
 	explainer: ExplainerConfig;
 	votesPerModel: number;
+	/** Shell command run (fire-and-forget) when an approval prompt appears.
+	 *  Empty string = disabled. */
+	approvalSoundCommand: string;
 }
 
 /** Defaults — match the original hardcoded behavior. */
@@ -152,7 +156,12 @@ function loadConfig(): BashGuardConfig {
 		votesPerModel = raw.votesPerModel;
 	}
 
-	return { voters, explainer, votesPerModel };
+	let approvalSoundCommand = "";
+	if (typeof raw.approvalSoundCommand === "string" && raw.approvalSoundCommand.trim().length > 0) {
+		approvalSoundCommand = raw.approvalSoundCommand.trim();
+	}
+
+	return { voters, explainer, votesPerModel, approvalSoundCommand };
 }
 
 /** Cached accessor. Reset `cachedConfig` on session_start to pick up edits. */
@@ -233,6 +242,23 @@ function countVotes(records: ReadonlyArray<VoterRecord>) {
 /** Create a themed border component. */
 function border(theme: Theme) {
 	return new DynamicBorder((s: string) => theme.fg("borderAccent", s));
+}
+
+// ── Approval sound ───────────────────────────────────────────────────────────
+
+/** Fire-and-forget shell command when a manual approval prompt appears. Reads
+ *  `approvalSoundCommand` from config; no-op when unset. Detached + unref'd so
+ *  it never blocks the dialog; errors are ignored silently. */
+function playApprovalSound(): void {
+	const command = getConfig().approvalSoundCommand;
+	if (!command) return;
+	try {
+		const proc = spawn(command, { stdio: "ignore", detached: true, shell: true });
+		proc.on("error", () => {}); // command missing / spawn failure — ignore
+		proc.unref();
+	} catch {
+		// spawn itself failed — ignore
+	}
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -699,6 +725,7 @@ async function showReviewDialog(
 	debugEnabled: boolean,
 	interactive: boolean,
 ): Promise<{ allowed: boolean; explanation: string }> {
+	if (interactive) playApprovalSound();
 	// Try full TUI dialog first
 	const customResult = await ctx.ui.custom<{ allowed: boolean; explanation: string }>((tui, theme, _kb, done) => {
 		const mdTheme = getMarkdownTheme();
@@ -864,6 +891,7 @@ export default function (pi: ExtensionAPI) {
 			if (!ctx.hasUI) {
 				return { block: true, reason: "Bash guard: no voter models available and no UI." };
 			}
+			playApprovalSound();
 			const ok = await ctx.ui.confirm(
 				"🔒 Bash Guard",
 				`No fast review models available. Allow this command?\n\n  $ ${command}`,

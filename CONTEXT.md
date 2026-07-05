@@ -174,7 +174,10 @@ how pi locates its own `settings.json` / `models.json`, respects the
   "explainer": {                 // object; default = anthropic/claude-haiku-4-5
     "provider": "zai",           // required
     "id": "glm-5.1"              // required
-  }
+  },
+  "approvalSoundCommand": "paplay /usr/share/sounds/Oxygen-Sys-Warning.ogg"
+  // shell command run (fire-and-forget, non-blocking) when an approval
+  // prompt appears; empty/absent = no sound.
 }
 ```
 
@@ -188,6 +191,10 @@ how pi locates its own `settings.json` / `models.json`, respects the
     kept. `label` defaults to `id` when omitted/empty.
   - `explainer`: must be an object with string `provider` + `id`.
   - `votesPerModel`: must be a positive integer (`Number.isInteger && > 0`).
+  - `approvalSoundCommand`: must be a non-empty string (after trim). Run via
+    `spawn(cmd, { shell: true, detached: true, stdio: "ignore" })` +
+    `unref()`, so it is fully **non-blocking** and never aborts the dialog;
+    spawn errors are swallowed. Empty/absent disables the sound.
 - The config is cached (`cachedConfig`) and reloaded on every `session_start`,
   so edits take effect next session.
 
