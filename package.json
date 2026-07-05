@@ -1,0 +1,16 @@
+{
+  "name": "pi-bash-guard",
+  "version": "0.1.0",
+  "description": "Adversarial security review extension for pi — intercepts bash tool calls and runs multi-model voting before allowing execution.",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "private": true,
+  "pi": {
+    "extensions": ["./bash-guard.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

@@ -42,6 +42,9 @@ user preferences.
 /home/lotus/Dev/Pi/bash-guard/
 ├── AGENTS.md          # short agent instructions (points here)
 ├── CONTEXT.md         # this file
+├── README.md          # user-facing install + usage docs
+├── LICENSE            # MIT
+├── package.json       # pi-package manifest (declares bash-guard.ts as an extension)
 └── bash-guard.ts      # the extension (single-file, TypeScript)
 ```
 
@@ -51,13 +54,24 @@ provider/model choices specific to a machine and must not leak secrets.
 
 ### Loading / install
 
-- The extension source lives here, but pi loads it via a **symlink**:
-  `~/.pi/agent/extensions/bash-guard.ts` → `/home/lotus/Dev/Pi/bash-guard/bash-guard.ts`.
-- pi auto-discovers `~/.pi/agent/extensions/*.ts`. Editing the source here and
-  running `/reload` (or starting a new session) picks up changes — **no build
-  step**. Extensions load via [jiti](https://github.com/unxs/jiti), so plain
-  TypeScript works without compilation.
-- The git repo currently has **no commits and no remote** (branch `master`).
+- **Published as a pi package.** `package.json` carries a `pi.extensions`
+  manifest pointing at `bash-guard.ts`. Users install with
+  `pi install git:github.com/rhian-cs/pi-bash-guard`, which clones the repo to
+  `~/.pi/agent/git/github.com/rhian-cs/pi-bash-guard/` and registers it in
+  `~/.pi/agent/settings.json`. Core pi packages (`@earendil-works/*`) are
+  declared as `peerDependencies` with `"*"` per pi convention — pi bundles
+  them, so they must NOT be bundled here.
+- **Hacking on the source** still uses the manual symlink:
+  `~/.pi/agent/extensions/bash-guard.ts` → this repo's `bash-guard.ts`. (If a
+  `pi install` copy is also registered, `pi remove` it first to avoid double
+  loading.)
+- pi auto-discovers `~/.pi/agent/extensions/*.ts` and installed pi packages.
+  Editing the source here and running `/reload` (or starting a new session)
+  picks up changes — **no build step**. Extensions load via
+  [jiti](https://github.com/unxs/jiti), so plain TypeScript works without
+  compilation.
+- The git repo lives on branch `main` at origin
+  `git@github.com:rhian-cs/pi-bash-guard.git` (no tags yet).
   Committing/pushing is the owner's job, not the agent's.
 
 ---

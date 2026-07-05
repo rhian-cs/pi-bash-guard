@@ -12,16 +12,19 @@ allowing execution. Users toggle it with `/guard on|off|debug`.
 
 ## Operational facts (must-know before editing)
 
-- **Source lives here; pi loads it via symlink.**
-  `~/.pi/agent/extensions/bash-guard.ts` → this repo's `bash-guard.ts`.
+- **It's a pi package now.** `package.json` declares `bash-guard.ts` under the
+  `pi.extensions` manifest, so users install it with
+  `pi install git:github.com/rhian-cs/pi-bash-guard` (cloned to
+  `~/.pi/agent/git/...`). The old manual-symlink flow still works for hacking
+  on the source — see README install section.
 - **No build step.** TypeScript is loaded via jiti. Reload with `/reload` or a
   new session. The config + voter caches are invalidated on `session_start`.
 - **Runtime config is NOT in this repo.** It lives at
   `~/.pi/agent/bash-guard.json` (resolved via pi's `getAgentDir()`). Never copy
   it in or commit it — it can hold provider/model choices and must not leak
   secrets.
-- **Git:** no commits / no remote yet (branch `master`). Don't stage/commit
-  unless explicitly asked.
+- **Git:** branch `main`, origin `git@github.com:rhian-cs/pi-bash-guard.git`,
+  no tags yet. Don't stage/commit unless explicitly asked.
 - **This is a security control.** The `SAFE_COMMAND_PATTERNS` whitelist and the
   voter/explainer prompts are safety-critical — be deliberate and conservative
   when changing them. A too-permissive whitelist silently bypasses the review.
