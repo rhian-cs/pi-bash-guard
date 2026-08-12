@@ -237,6 +237,7 @@ When the config file is absent or invalid, Bash Guard uses:
 | `voters`       | `[{ anthropic, claude-haiku-4-5 }]` |
 | `explainer`    | `{ anthropic, claude-haiku-4-5 }`   |
 | `votesPerModel`| `5`                              |
+| `voteTimeoutMs` | `15000`                        |
 | `approvalSoundCommand` | _(disabled — empty string)_ |
 
 ### When config takes effect
@@ -289,6 +290,17 @@ Bash Guard works across pi's runtime modes:
   `/reload` or start a new session.
 - **Voters keep timing out.** Either your voter models are too slow, or your
   network/API is rate-limited. Try faster models or lower `votesPerModel`.
+- **Voters return empty results / `stop: length` errors.** The voter model is
+  exhausting its 256-token per-vote budget before emitting YES/NO. On providers
+  that default to thinking-on (e.g. ZhipuAI/GLM via the `zai` format), pi only
+  sends an explicit *disable-thinking* payload when the model is registered
+  with `reasoning: true`. A model registered `reasoning: false` gets no
+  thinking parameter, so the provider reasons anyway and burns the whole
+  budget. Register such voter models with `reasoning: true`; pi disables
+  thinking per-request when no reasoning level is requested, so the vote still
+  runs fast. (Do **not** try to disable thinking by setting `reasoning: false` —
+  that is a capability flag, not a runtime toggle, and has the opposite effect
+  on these providers.)
 - **Turn it off entirely for a session:** `/guard off`.
 
 ## Further reading

@@ -97,7 +97,8 @@ Entry point: `export default function (pi: ExtensionAPI)`.
    6. `distributeVoters(models)` → expand to `len(models) × votesPerModel`
       voters, round-robin across models.
    7. `runVoteTracking(...)` → fire all votes in parallel (each with its own
-      `VOTE_TIMEOUT_MS`); live-updates the TUI. Esc cancels.
+      per-vote timeout from `config.voteTimeoutMs`); live-updates the TUI. Esc
+      cancels.
    8. `computeVoteResult(...)` → unanimous yes/no or split.
    9. Unanimous YES → auto-allow. Otherwise → `showReviewDialog(...)`, which
       calls `getExplanation(...)` and asks y/n (interactive) or blocks
@@ -164,6 +165,7 @@ how pi locates its own `settings.json` / `models.json`, respects the
 ```jsonc
 {
   "votesPerModel": 2,            // positive integer; default 5
+  "voteTimeoutMs": 15000,        // positive integer; per-vote abort timeout (ms); default 15000
   "voters": [                    // array; default = single haiku entry
     {
       "provider": "zai",         // required, must match modelRegistry
@@ -191,6 +193,7 @@ how pi locates its own `settings.json` / `models.json`, respects the
     kept. `label` defaults to `id` when omitted/empty.
   - `explainer`: must be an object with string `provider` + `id`.
   - `votesPerModel`: must be a positive integer (`Number.isInteger && > 0`).
+  - `voteTimeoutMs`: must be a positive integer (`Number.isInteger && > 0`).
   - `approvalSoundCommand`: must be a non-empty string (after trim). Run via
     `spawn(cmd, { shell: true, detached: true, stdio: "ignore" })` +
     `unref()`, so it is fully **non-blocking** and never aborts the dialog;
@@ -204,6 +207,7 @@ how pi locates its own `settings.json` / `models.json`, respects the
 - `DEFAULT_EXPLAINER` = `{ provider: "anthropic", id: "claude-haiku-4-5" }`
   (built from the `EXPLAINER_PROVIDER` / `EXPLAINER_MODEL_ID` constants).
 - `VOTES_PER_MODEL` = `5`.
+- `DEFAULT_VOTE_TIMEOUT_MS` = `15000` (overridable by `config.voteTimeoutMs`).
 
 ### Current live config (this machine)
 
@@ -252,15 +256,15 @@ read-only commands.
 | Constant | Value | Notes |
 | --- | --- | --- |
 | `VOTES_PER_MODEL` | `5` | Default only; overridable by `config.votesPerModel` |
-| `VOTE_TIMEOUT_MS` | `5000` | Per-vote abort timeout; abstain on timeout |
+| `DEFAULT_VOTE_TIMEOUT_MS` | `15000` | Default only; per-vote abort timeout, overridable by `config.voteTimeoutMs`; abstain on timeout |
 | `EXPLAINER_CONTEXT_MESSAGES` | `20` | Session entries fed to the explainer |
 | `EXPLAINER_PROVIDER` / `EXPLAINER_MODEL_ID` | `anthropic` / `claude-haiku-4-5` | Source of `DEFAULT_EXPLAINER` |
 | `VOTER_SYSTEM_PROMPT` / `EXPLAINER_SYSTEM_PROMPT` | — | The review + explanation instructions |
 | `SAFE_COMMAND_PATTERNS` | regex list | See §6 |
 
-`votesPerModel`, `voteTimeoutMs`, and `explainerContextMessages` are **not**
-all wired to the config — only `votesPerModel` is. If you make the others
-configurable, update this table and §5.
+`votesPerModel` and `voteTimeoutMs` are wired to the config;
+`explainerContextMessages` is not (still a constant). If you wire the latter
+up, update this table and §5.
 
 ---
 
@@ -273,8 +277,22 @@ configurable, update this table and §5.
   matches pi's own config resolution. (Project-local config, by contrast,
   should use `CONFIG_DIR_NAME` + a `ctx.isProjectTrusted()` gate — not used
   here since this config is global.)
-- **Explainer fallback chain** is configured model → `ctx.model`. Both have
-  reasoning forced off.
+- **Explainer fallback chain** is configured model → `ctx.model`. Neither
+  forces `model.reasoning`; see the trap below.
+- **`model.reasoning` is a capability flag, not a runtime thinking toggle.**
+  pi-ai's OpenAI-compatible adapter only emits a *disable-thinking* payload
+  (e.g. `thinking: { type: "disabled" }` for `zai`, `enable_thinking: false`
+  for `qwen`, etc.) inside branches gated on `model.reasoning === true`. If a
+  model is registered `reasoning: false`, pi sends **no** thinking parameter,
+  and providers that default to thinking-on (ZhipuAI/GLM `zai`, Qwen, etc.) 
+  then reason anyway — burning the small per-vote (256 tok) / per-explanation
+  (300 tok) budget and yielding empty output with `stop: length`. **Fix at the
+  model registration**, not in this extension: register such models with
+  `reasoning: true`; pi disables thinking per-request when no reasoning level
+  is requested, so votes/explanations still run fast. Do **not** try to
+  suppress thinking by spreading `{ ...model, reasoning: false }` into the
+  `complete()` call — that removes the disable payload and has the opposite
+  effect on these providers.
 - **Override memory is append-only.** Restore reads the *last* state entry
   (reverse scan) but *all* override entries (forward scan).
 - **Caches** (`cachedVoterModels`, `cachedConfig`) are intentionally

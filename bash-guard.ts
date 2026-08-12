@@ -47,7 +47,7 @@ import { join } from "node:path";
 
 /** Number of votes per available model. Total voters = available models × this. */
 const VOTES_PER_MODEL = 5;
-const VOTE_TIMEOUT_MS = 5000;
+const DEFAULT_VOTE_TIMEOUT_MS = 15000;
 
 const EXPLAINER_PROVIDER = "anthropic";
 const EXPLAINER_MODEL_ID = "claude-haiku-4-5";
@@ -105,6 +105,8 @@ interface BashGuardConfig {
 	voters: VoterConfig[];
 	explainer: ExplainerConfig;
 	votesPerModel: number;
+	/** Per-vote abort timeout in milliseconds. */
+	voteTimeoutMs: number;
 	/** Shell command run (fire-and-forget) when an approval prompt appears.
 	 *  Empty string = disabled. */
 	approvalSoundCommand: string;
@@ -156,12 +158,17 @@ function loadConfig(): BashGuardConfig {
 		votesPerModel = raw.votesPerModel;
 	}
 
+	let voteTimeoutMs = DEFAULT_VOTE_TIMEOUT_MS;
+	if (typeof raw.voteTimeoutMs === "number" && Number.isInteger(raw.voteTimeoutMs) && raw.voteTimeoutMs > 0) {
+		voteTimeoutMs = raw.voteTimeoutMs;
+	}
+
 	let approvalSoundCommand = "";
 	if (typeof raw.approvalSoundCommand === "string" && raw.approvalSoundCommand.trim().length > 0) {
 		approvalSoundCommand = raw.approvalSoundCommand.trim();
 	}
 
-	return { voters, explainer, votesPerModel, approvalSoundCommand };
+	return { voters, explainer, votesPerModel, voteTimeoutMs, approvalSoundCommand };
 }
 
 /** Cached accessor. Reset `cachedConfig` on session_start to pick up edits. */
@@ -367,10 +374,11 @@ async function castVote(
 	const t0 = performance.now();
 	const controller = new AbortController();
 	let timedOut = false;
+	const timeoutMs = getConfig().voteTimeoutMs;
 	const timer = setTimeout(() => {
 		timedOut = true;
 		controller.abort();
-	}, VOTE_TIMEOUT_MS);
+	}, timeoutMs);
 
 	const onParentAbort = () => controller.abort();
 	parentSignal?.addEventListener("abort", onParentAbort, { once: true });
@@ -396,7 +404,7 @@ async function castVote(
 				label: voter.label,
 				status: timedOut ? "timeout" : "error",
 				durationMs: ms,
-				error: response.errorMessage ?? (timedOut ? `Timed out after ${VOTE_TIMEOUT_MS}ms` : "Request aborted"),
+				error: timedOut ? `Timed out after ${timeoutMs}ms` : (response.errorMessage ?? "Request aborted"),
 			};
 		}
 
@@ -412,7 +420,7 @@ async function castVote(
 		const ms = performance.now() - t0;
 		const msg = e?.message ?? String(e);
 		if (controller.signal.aborted && !parentSignal?.aborted) {
-			return { label: voter.label, status: "timeout", durationMs: ms, error: msg };
+			return { label: voter.label, status: "timeout", durationMs: ms, error: timedOut ? `Timed out after ${timeoutMs}ms` : msg };
 		}
 		return { label: voter.label, status: "error", durationMs: ms, error: msg };
 	} finally {
@@ -622,7 +630,9 @@ async function runVoteTracking(
 
 // ── Explainer ────────────────────────────────────────────────────────────────
 
-/** Try preferred explainer model, then fall back to ctx.model. Both with reasoning disabled. */
+/** Try preferred explainer model, then fall back to ctx.model. Reasoning is
+ *  left at the model's registered capability; pi disables thinking per-request
+ *  when no reasoning level is requested (see CONTEXT.md §8 reasoning trap). */
 async function resolveExplainerModel(
 	ctx: ExtensionContext,
 ): Promise<{ model: Model<any>; apiKey?: string; headers?: Record<string, string> } | null> {
@@ -637,7 +647,7 @@ async function resolveExplainerModel(
 		try {
 			const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 			if (auth.ok && (auth.apiKey || auth.headers)) {
-				return { model: { ...model, reasoning: false }, apiKey: auth.apiKey, headers: auth.headers };
+				return { model, apiKey: auth.apiKey, headers: auth.headers };
 			}
 		} catch {}
 	}
