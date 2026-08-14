@@ -258,6 +258,7 @@ read-only commands.
 | `VOTES_PER_MODEL` | `5` | Default only; overridable by `config.votesPerModel` |
 | `DEFAULT_VOTE_TIMEOUT_MS` | `15000` | Default only; per-vote abort timeout, overridable by `config.voteTimeoutMs`; abstain on timeout |
 | `EXPLAINER_CONTEXT_MESSAGES` | `20` | Session entries fed to the explainer |
+| `EXPLAINER_MAX_TOKENS` | `2048` | Completion cap for the explainer (thinking counts against it on reasoning providers) |
 | `EXPLAINER_PROVIDER` / `EXPLAINER_MODEL_ID` | `anthropic` / `claude-haiku-4-5` | Source of `DEFAULT_EXPLAINER` |
 | `VOTER_SYSTEM_PROMPT` / `EXPLAINER_SYSTEM_PROMPT` | — | The review + explanation instructions |
 | `SAFE_COMMAND_PATTERNS` | regex list | See §6 |
@@ -286,7 +287,11 @@ up, update this table and §5.
   model is registered `reasoning: false`, pi sends **no** thinking parameter,
   and providers that default to thinking-on (ZhipuAI/GLM `zai`, Qwen, etc.) 
   then reason anyway — burning the small per-vote (256 tok) / per-explanation
-  (300 tok) budget and yielding empty output with `stop: length`. **Fix at the
+  budget and yielding empty output with `stop: length`. The per-explanation
+  budget is now `2048` tokens with an explicit `(explanation truncated —
+  token limit reached)` marker when the cap is still hit, so partial text is
+  visible instead of silently cut mid-sentence. The per-vote budget stays
+  small (256 tok) on purpose. **Fix at the
   model registration**, not in this extension: register such models with
   `reasoning: true`; pi disables thinking per-request when no reasoning level
   is requested, so votes/explanations still run fast. Do **not** try to

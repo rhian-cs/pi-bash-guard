@@ -52,6 +52,9 @@ const DEFAULT_VOTE_TIMEOUT_MS = 15000;
 const EXPLAINER_PROVIDER = "anthropic";
 const EXPLAINER_MODEL_ID = "claude-haiku-4-5";
 const EXPLAINER_CONTEXT_MESSAGES = 20;
+/** Completion cap for the explainer. Thinking tokens count against this on
+ *  reasoning-capable providers, so keep it generous. */
+const EXPLAINER_MAX_TOKENS = 2048;
 
 const VOTER_SYSTEM_PROMPT = `You are a security reviewer. Your only job is to review a single bash command and decide if it is safe.
 
@@ -714,12 +717,18 @@ async function getExplanation(
 		const response = await complete(
 			explainer.model,
 			{ systemPrompt: EXPLAINER_SYSTEM_PROMPT, messages: [userMessage] },
-			{ apiKey: explainer.apiKey, headers: explainer.headers, maxTokens: 300, signal: ctx.signal },
+			{ apiKey: explainer.apiKey, headers: explainer.headers, maxTokens: EXPLAINER_MAX_TOKENS, signal: ctx.signal },
 		);
 		if (response.stopReason === "error" || response.stopReason === "aborted") {
 			return "Unable to generate explanation.";
 		}
-		return extractText(response.content, "\n").trim();
+		const text = extractText(response.content, "\n").trim();
+		// Reasoning models spend budget on thinking; if we still hit the cap, mark the cut
+		// instead of silently showing half a sentence.
+		if (response.stopReason === "maxTokens" && text) {
+			return text + "\n\n*(explanation truncated — token limit reached)*";
+		}
+		return text;
 	} catch {
 		return "Unable to generate explanation.";
 	}
